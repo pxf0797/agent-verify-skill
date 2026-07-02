@@ -1,0 +1,26 @@
+{
+  "pass": true,
+  "score": 88,
+  "issues": [
+    {
+      "severity": "minor",
+      "category": "跨文档笔误",
+      "location": "skill-architecture-design.md, 3.1 init 行为描述",
+      "description": "架构文档 3.1 节 init 命令行为描述写的是'生成默认配置文件（suite.yaml）'，但正确文件名应为 config.yaml。对话流(3.3)和目录结构(4.1)中均正确引用 config.yaml。该笔误不影响实施，开发时按 4.1 文件结构执行即可。"
+    },
+    {
+      "severity": "minor",
+      "category": "跨文档笔误",
+      "location": "skill-architecture-design.md, 3.3 场景A对话流",
+      "description": "架构文档 3.3 对话流中输出目录结构写的是 'suites/ assertions/ baselines/ config.yaml'，其中的 'assertions/' 应为 'assertions.yaml'（断言定义文件，非目录）。文件结构 4.1 和 4.4.1 中均正确。"
+    },
+    {
+      "severity": "post-MVP",
+      "category": "examples/ 命名风格差异",
+      "location": "skill-architecture-design.md 4.1 vs skill-implementation-plan.md 4.1",
+      "description": "架构文档 examples/example-search-agent/ 下文件名使用 suite.yaml 和 baseline-v1.json，实施文档 examples/example-search-agent/ 下使用 suites/search-agent.yaml 和 baselines/v1.0-release.json。两个 example 目录的命名风格不一致，但不影响实施（example 可独立调整）。实施时建议统一按实施文档的命名规范。"
+    }
+  ],
+  "verification_history": "68 (T1-structural) → 82 (T2-consistency) → 88 (T6-final)",
+  "summary": "终审通过。两份文档在核心结构上完全一致：路径统一为 ./agent-verify/，断言配置统一为单一 assertions.yaml，7 个命令体系、配置格式、模块划分、开发路线图均对齐。发现的 2 处孤立笔误（架构文档 init 行为中 suite.yaml 应为 config.yaml、对话流中 assertions/ 应为 assertions.yaml）均被架构文档自身的核心章节（4.1 文件结构、4.4.1 assertions.yaml 定义）和实施文档纠正，属于非结构性笔误，不影响实施。方案整体可实施，MVP 范围和 V1.0 范围清晰，依赖和约束完整。分数从 82 提升至 88，反映跨文档一致性校验完成且无阻塞性问题。"
+}
