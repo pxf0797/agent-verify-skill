@@ -254,7 +254,7 @@ class ToolParamChecker:
 
     def check(self, trace: list, target: dict, condition: dict) -> tuple[bool, str | None, dict]:
         tool_name = target.get("tool_name")
-        param = target.get("param")
+        param = target.get("param") or target.get("param_path")
         if not tool_name:
             return False, "target 缺少 'tool_name'", {}
         if not param:
