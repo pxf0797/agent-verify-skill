@@ -467,7 +467,7 @@ def save_baseline(
     import datetime
 
     now = datetime.datetime.now()
-    timestamp = now.strftime("%Y%m%d-%H%M%S")
+    timestamp = now.strftime("%Y%m%d-%H%M%S%f")
     filename = f"{name}-{timestamp}.json"
     filepath = os.path.join(baselines_dir, filename)
 

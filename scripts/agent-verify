@@ -188,7 +188,7 @@ def parse_natural_language(desc: str) -> dict:
             # 检测参数约束
             if any(w in desc_lower for w in ["参数", "输入", "query", "查询词"]):
                 return {
-                    "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+                    "id": f"assert-{datetime.now().strftime('%H%M%S%f')}",
                     "name": desc[:60],
                     "type": "tool_param",
                     "target": {"tool_name": tool, "param": "query"},
@@ -199,7 +199,7 @@ def parse_natural_language(desc: str) -> dict:
             # 调用次数
             if any(w in desc_lower for w in ["一次", "至少", "一次以上", "必须", "调用"]):
                 return {
-                    "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+                    "id": f"assert-{datetime.now().strftime('%H%M%S%f')}",
                     "name": desc[:60],
                     "type": "tool_call",
                     "target": {"tool_name": tool},
@@ -226,7 +226,7 @@ def parse_natural_language(desc: str) -> dict:
         pattern = "|".join(patterns[:3]) if patterns else ".+"
 
         return {
-            "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+            "id": f"assert-{datetime.now().strftime('%H%M%S%f')}",
             "name": desc[:60],
             "type": "output_match",
             "target": {"agent": "default"},
@@ -237,7 +237,7 @@ def parse_natural_language(desc: str) -> dict:
 
     # 默认: tool_call
     return {
-        "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+        "id": f"assert-{datetime.now().strftime('%H%M%S%f')}",
         "name": desc[:60],
         "type": "tool_call",
         "target": {"tool_name": "web_search"},
