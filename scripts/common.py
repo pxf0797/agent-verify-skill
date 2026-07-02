@@ -27,7 +27,7 @@ TOOL_PARAM_CONDITIONS = [
     "min_length", "max_length", "not_null", "not_whitespace_only",
     "pattern", "allowed_values", "forbidden_values",
 ]
-OUTPUT_MATCH_CONDITIONS = ["pattern", "min_matches", "case_sensitive"]
+OUTPUT_MATCH_CONDITIONS = ["pattern", "min_matches", "case_sensitive", "match_behavior"]
 PATH_SEQUENCE_CONDITIONS = ["order", "all_present"]  # order: "strict" | "relaxed"
 TIMING_CONDITIONS = ["max_duration_ms", "min_duration_ms"]
 OUTPUT_SCHEMA_CONDITIONS = ["schema"]
