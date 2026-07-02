@@ -391,6 +391,13 @@ class OutputMatchChecker:
             "output_length": len(final_output),
         }
 
+        match_behavior = condition.get("match_behavior", "must_match")
+        if match_behavior == "must_not_match":
+            if match_count > 0:
+                return False, f"不应匹配但发现了 {match_count} 次匹配", details
+            else:
+                return True, None, details
+        # 默认: must_match
         if match_count >= min_matches:
             return True, None, details
         else:
@@ -406,7 +413,7 @@ class PathSequenceChecker:
     TODO(V1.0): 实现路径顺序检查。
     """
     def check(self, trace: list, target: dict, condition: dict) -> tuple[bool, str | None, dict]:
-        return False, "path_sequence 检查器 (V1.0 启用)", {}
+        return False, "path_sequence 检查器 (V1.0 启用)", {"not_implemented": True}
 
 
 class TimingChecker:
@@ -414,7 +421,7 @@ class TimingChecker:
     TODO(V1.0): 实现计时检查。
     """
     def check(self, trace: list, target: dict, condition: dict) -> tuple[bool, str | None, dict]:
-        return False, "timing 检查器 (V1.0 启用)", {}
+        return False, "timing 检查器 (V1.0 启用)", {"not_implemented": True}
 
 
 class OutputSchemaChecker:
@@ -422,7 +429,7 @@ class OutputSchemaChecker:
     TODO(V1.0): 实现 JSON Schema 验证。
     """
     def check(self, trace: list, target: dict, condition: dict) -> tuple[bool, str | None, dict]:
-        return False, "output_schema 检查器 (V1.0 启用)", {}
+        return False, "output_schema 检查器 (V1.0 启用)", {"not_implemented": True}
 
 
 class CustomScriptChecker:

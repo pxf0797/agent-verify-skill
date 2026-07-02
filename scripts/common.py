@@ -303,19 +303,22 @@ def parse_trace_output(raw_stdout: str, raw_stderr: str = "") -> list[TraceEvent
     非结构化输出行被忽略（不报错）。
     """
     events: list[TraceEvent] = []
-    # 正则: 匹配以 TRACE_PREFIX 开头后接 JSON 的行
-    pattern = re.compile(
-        r"\[AGENT_VERIFY:TRACE\]\s*(\{.*?\})\s*",
-    )
-    for match in pattern.finditer(raw_stdout):
-        json_str = match.group(1)
+    # 使用更鲁棒的 JSON 提取: 先按行拆分, 对每行按前缀截取后尝试解析
+    # 避免 .*? 在嵌套 JSON 中对第一个 } 提前终止的问题
+    events: list[TraceEvent] = []
+    for line in raw_stdout.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith(TRACE_PREFIX):
+            continue
+        json_part = stripped[len(TRACE_PREFIX):].strip()
+        if not json_part:
+            continue
         try:
-            data = json.loads(json_str)
+            data = json.loads(json_part)
         except json.JSONDecodeError:
             continue
         if not isinstance(data, dict):
             continue
-        # 验证必需字段
         if "type" not in data or "seq" not in data:
             continue
         if data.get("type") not in TRACE_EVENT_TYPES:

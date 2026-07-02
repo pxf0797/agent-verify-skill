@@ -6,13 +6,13 @@ agent-verify — AI Agent 验证工具（个人开发者版）
   三步上手:
     1. agent-verify setup         创建验证项目
     2. agent-verify add <描述>     用自然语言添加断言
-    3. agent-verify test <描述>    描述 Agent 行为 → 自动检查
+    3. agent-verify check <描述>    描述 Agent 行为 → 自动检查
 
   示例:
     agent-verify setup
     agent-verify add "Agent必须调用了web_search工具，且搜索参数不能为空"
     agent-verify add "Agent的输出必须包含天气信息"
-    agent-verify test "我问'北京天气'，Agent调了web_search搜了天气，返回'今天晴22°C'"
+    agent-verify check "我问'北京天气'，Agent调了web_search搜了天气，返回'今天晴22°C'"
 
   一键演示:
     agent-verify demo
@@ -47,7 +47,7 @@ def cmd_setup():
     print('    agent-verify add "输出必须包含结论或答案"')
     print()
     print("  然后描述 Agent 行为验证:")
-    print('    agent-verify test "我问天气，Agent搜了并返回今天晴22°C"')
+    print('    agent-verify check "我问天气，Agent搜了并返回今天晴22°C"')
 
 def cmd_add(description):
     """用自然语言描述添加断言"""
@@ -74,7 +74,7 @@ def cmd_add(description):
     print(f"   当前共 {len(data['assertions'])} 条断言")
     print(f"   查看: cat {proj}/assertions.yaml")
 
-def cmd_test(description):
+def cmd_check(description):
     """描述 Agent 行为 → 自动构造 trace → 运行检查"""
     proj = find_project()
     if not proj:
@@ -124,7 +124,7 @@ def cmd_test(description):
     if passed < total:
         print("💡 可能的原因:")
         print("   1. 描述的场景和断言不匹配 → 编辑 assertions.yaml 调整规则")
-        print("   2. Agent 行为确实有问题 → 修复 Agent 后重新 agent-verify test")
+        print("   2. Agent 行为确实有问题 → 修复 Agent 后重新 agent-verify check")
 
 def cmd_list():
     """列出当前所有断言"""
@@ -156,16 +156,16 @@ def cmd_demo():
         cmd_add("输出必须包含天气相关信息")
 
         print("\n📋 测试场景A: Agent 正确完成任务...")
-        cmd_test("我问北京天气，Agent调用了web_search搜索'北京天气'，返回了'答案：北京今天晴，22°C'")
+        cmd_check("我问北京天气，Agent调用了web_search搜索'北京天气'，返回了'答案：北京今天晴，22°C'")
 
         print("\n📋 测试场景B: Agent 忘记调工具...")
-        cmd_test("Agent直接返回了'抱歉，服务暂不可用'，没有调用任何工具")
+        cmd_check("Agent直接返回了'抱歉，服务暂不可用'，没有调用任何工具")
 
         print("\n═══════════════════════════════════════════")
         print("  演示完成！日常使用就是这三步:")
         print("    1. agent-verify setup")
         print("    2. agent-verify add \"你的断言\"")
-        print("    3. agent-verify test \"你的场景\"")
+        print("    3. agent-verify check \"你的场景\"")
         print("═══════════════════════════════════════════")
 
 
@@ -334,7 +334,7 @@ def main():
     commands = {
         "setup": lambda: cmd_setup(),
         "add": lambda: cmd_add(rest) if rest else print("用法: agent-verify add \"描述断言规则\""),
-        "test": lambda: cmd_test(rest) if rest else print("用法: agent-verify test \"描述Agent行为\""),
+        "check": lambda: cmd_check(rest) if rest else print("用法: agent-verify check \"描述Agent行为\""),
         "list": lambda: cmd_list(),
         "demo": lambda: cmd_demo(),
     }
