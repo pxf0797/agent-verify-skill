@@ -1,99 +1,18 @@
 # ============================================================
-# agent-verify Assertions
-# 项目: {TARGET_NAME}
-# 创建时间: {CURRENT_DATE}
-# 版本: {SKILL_VERSION}
+# agent-verify Assertions — 项目: {{TARGET_NAME}}
 # ============================================================
-# 本文件定义 Agent 验证的断言规则。
-# enabled: false 的断言被引擎跳过，仅作参考。
-# MVP 断言类型: tool_call | tool_param | output_match
-# V1.0 断言类型: path_sequence | timing | output_schema
-# 扩展类型: custom_script
+# 用自然语言添加断言: agent-verify add "你的规则"
+# 断言类型: tool_call | tool_param | output_match
 # ============================================================
-
-# --- MVP 断言类型 ---
 
 assertions:
-- id: at-least-one-search
-  name: Search tool called
+- id: example-tool-call
+  name: '示例: 必须调用某工具'
   type: tool_call
   target:
     tool_name: web_search
   condition:
     min_count: 1
   severity: error
-  enabled: true
-- id: search-query-not-empty
-  name: Search query not empty
-  type: tool_param
-  target:
-    tool_name: web_search
-    param: query
-  condition:
-    not_null: true
-    not_whitespace_only: true
-    min_length: 2
-  severity: error
-  enabled: true
-- id: output-contains-answer
-  name: Output contains answer
-  type: output_match
-  target:
-    agent: my-agent
-  condition:
-    pattern: 答案[：:]
-    min_matches: 1
-    case_sensitive: false
-  severity: error
-  enabled: true
-- id: expensive-tool-capped
-  name: Prevent excessive calls
-  type: tool_call
-  target:
-    tool_name: web_scrape
-  condition:
-    max_count: 3
-  severity: warning
   enabled: false
 
-
-# --- V1.0 断言类型（参考示例，MVP 阶段引擎不会实际检查） ---
-
-# 示例 5: path_sequence — 验证执行路径顺序
-# - id: expected-path-flow
-#   name: "Agent follows expected planning-execution-verification flow"
-#   type: path_sequence
-#   target:
-#     steps:
-#       - planning
-#       - execution
-#       - verification
-#   condition:
-#     order: relaxed
-#     all_present: true
-#   enabled: false
-
-# 示例 6: timing — 验证执行时间
-# - id: total-time-limit
-#   name: "Total execution under 60 seconds"
-#   type: timing
-#   target:
-#     phase: total
-#   condition:
-#     max_duration_ms: 60000
-#   enabled: false
-
-# 示例 7: output_schema — 验证输出 JSON Schema
-# - id: valid-json-structure
-#   name: "Output matches expected JSON structure"
-#   type: output_schema
-#   target:
-#     field: final_output
-#   condition:
-#     schema:
-#       type: object
-#       required: [answer]
-#       properties:
-#         answer:
-#           type: string
-#   enabled: false

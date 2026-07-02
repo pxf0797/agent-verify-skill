@@ -1,177 +1,349 @@
 #!/usr/bin/env python3
 """
-agent-verify 简化工具 — 个人开发者日常使用
+agent-verify — AI Agent 验证工具（个人开发者版）
 
-用法:
-  agent-verify init [项目名]              初始化
-  agent-verify check <trace.jsonl>        运行检查
-  agent-verify demo                       跑演示
+═══════════════════════════════════════════════════════
+  三步上手:
+    1. agent-verify setup         创建验证项目
+    2. agent-verify add <描述>     用自然语言添加断言
+    3. agent-verify test <描述>    描述 Agent 行为 → 自动检查
 
-示例:
-  agent-verify init my-agent
-  agent-verify check trace.jsonl
+  示例:
+    agent-verify setup
+    agent-verify add "Agent必须调用了web_search工具，且搜索参数不能为空"
+    agent-verify add "Agent的输出必须包含天气信息"
+    agent-verify test "我问'北京天气'，Agent调了web_search搜了天气，返回'今天晴22°C'"
+
+  一键演示:
+    agent-verify demo
+═══════════════════════════════════════════════════════
 """
 
-import sys, os, subprocess, json, yaml
+import sys, os, subprocess, json, yaml, re
 from pathlib import Path
+from datetime import datetime
 
 SKILL_DIR = Path.home() / ".claude" / "skills" / "agent-verify"
 SCRIPTS = SKILL_DIR / "scripts"
 
 def find_project():
-    """从当前目录向上找 agent-verify/ 项目目录"""
-    cwd = Path.cwd()
-    for p in [cwd] + list(cwd.parents)[:5]:
+    for p in [Path.cwd()] + list(Path.cwd().parents)[:5]:
         v = p / "agent-verify"
-        if (v / "config.yaml").exists():
+        if (v / "config.yaml").exists() and (v / "assertions.yaml").exists():
             return v
     return None
 
-def cmd_init(args):
-    name = args[0] if args else Path.cwd().name
+def cmd_setup():
+    """初始化验证项目"""
     subprocess.run([
         "python3", str(SCRIPTS / "init_verify.py"),
-        "--target-dir", ".",
-        "--target-name", name,
+        "--target-dir", ".", "--target-name", Path.cwd().name,
     ])
-    print("\n✅ 初始化完成！")
-    print(f"   断言文件: agent-verify/assertions.yaml  ← 编辑这个文件")
-    print(f"   接下来: agent-verify check trace.jsonl")
+    print()
+    print("✅ 验证项目已创建！")
+    print()
+    print("  接下来用自然语言添加断言:")
+    print('    agent-verify add "Agent必须调用web_search工具"')
+    print('    agent-verify add "输出必须包含结论或答案"')
+    print()
+    print("  然后描述 Agent 行为验证:")
+    print('    agent-verify test "我问天气，Agent搜了并返回今天晴22°C"')
 
-def cmd_check(args):
+def cmd_add(description):
+    """用自然语言描述添加断言"""
     proj = find_project()
     if not proj:
-        print("❌ 当前目录下未找到 agent-verify/ 项目，请先执行: agent-verify init")
-        sys.exit(1)
+        print("❌ 请先执行: agent-verify setup")
+        return
 
-    trace_file = args[0] if args else "trace.jsonl"
-    assertions = proj / "assertions.yaml"
+    # 解析自然语言 → 断言规则
+    assertion = parse_natural_language(description)
 
-    if not Path(trace_file).exists():
-        print(f"❌ trace 文件不存在: {trace_file}")
-        print(f"\n💡 trace.jsonl 格式 (每行一个JSON事件):")
-        print(f'   {{"type":"tool_call","tool_name":"Read","input":{{...}},"seq":1}}')
-        print(f'   {{"type":"run_end","final_output":"...","seq":2}}')
-        print(f"\n   事件类型: tool_call | tool_result | run_end")
-        sys.exit(1)
+    with open(proj / "assertions.yaml") as f:
+        data = yaml.safe_load(f)
 
+    if not isinstance(data, dict) or "assertions" not in data:
+        data = {"assertions": []}
+
+    data["assertions"].append(assertion)
+
+    with open(proj / "assertions.yaml", "w") as f:
+        yaml.dump(data, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+    print(f"✅ 已添加断言: [{assertion['type']}] {assertion['name']}")
+    print(f"   当前共 {len(data['assertions'])} 条断言")
+    print(f"   查看: cat {proj}/assertions.yaml")
+
+def cmd_test(description):
+    """描述 Agent 行为 → 自动构造 trace → 运行检查"""
+    proj = find_project()
+    if not proj:
+        print("❌ 请先执行: agent-verify setup")
+        return
+
+    print(f"📋 解析场景: {description[:60]}...")
+
+    # 从自然语言构造 trace
+    trace = build_trace_from_description(description)
+
+    with open("/tmp/agent-verify-trace.jsonl", "w") as f:
+        for e in trace:
+            f.write(json.dumps(e, ensure_ascii=False) + "\n")
+
+    print(f"   构造了 {len(trace)} 个 trace 事件")
+
+    # 运行断言检查
     result = subprocess.run([
         "python3", str(SCRIPTS / "assertion_engine.py"),
-        "--assertions", str(assertions),
-        "--trace", trace_file,
+        "--assertions", str(proj / "assertions.yaml"),
+        "--trace", "/tmp/agent-verify-trace.jsonl",
         "--check",
     ], capture_output=True, text=True)
 
     if result.returncode != 0:
-        print(f"❌ 执行失败: {result.stderr}")
-        sys.exit(1)
+        print(f"❌ {result.stderr}")
+        return
 
     data = json.loads(result.stdout)
     passed = sum(1 for r in data["results"] if r["pass_"])
     total = len(data["results"])
 
-    print(f"\n{'✅' if passed == total else '⚠️'}  {passed}/{total} 通过\n")
+    print()
+    if passed == total:
+        print(f"🎉 {passed}/{total} 全部通过！")
+    else:
+        print(f"⚠️  {passed}/{total} 通过")
+    print()
+
     for r in data["results"]:
         icon = "✅" if r["pass_"] else "❌"
-        reason = f" — {r['reason']}" if r.get("reason") else ""
-        print(f"  {icon} {r['assertion_id']}{reason}")
+        detail = f" — {r['reason']}" if r.get("reason") else ""
+        print(f"  {icon} {r['assertion_name'] or r['assertion_id']}{detail}")
 
-    return passed == total
+    print()
+    if passed < total:
+        print("💡 可能的原因:")
+        print("   1. 描述的场景和断言不匹配 → 编辑 assertions.yaml 调整规则")
+        print("   2. Agent 行为确实有问题 → 修复 Agent 后重新 agent-verify test")
+
+def cmd_list():
+    """列出当前所有断言"""
+    proj = find_project()
+    if not proj:
+        print("❌ 请先执行: agent-verify setup")
+        return
+
+    subprocess.run([
+        "python3", str(SCRIPTS / "assertion_engine.py"),
+        "--assertions", str(proj / "assertions.yaml"),
+        "--list",
+    ])
 
 def cmd_demo():
-    """跑完整演示"""
+    """30秒演示"""
     import tempfile
     with tempfile.TemporaryDirectory() as tmp:
         os.chdir(tmp)
-        print("═══════════════════════════════════")
-        print("  agent-verify 快速演示")
-        print("═══════════════════════════════════\n")
+        print("═══════════════════════════════════════════")
+        print("  agent-verify 一分钟演示")
+        print("═══════════════════════════════════════════\n")
 
-        # 1. Init
-        print("📦 初始化...")
-        subprocess.run([
-            "python3", str(SCRIPTS / "init_verify.py"),
-            "--target-dir", ".", "--target-name", "demo-agent",
-        ], capture_output=True)
+        cmd_setup()
 
-        # 2. 写入断言
-        assertions = {"assertions": [
-            {"id":"called-search","name":"调用了搜索工具","type":"tool_call",
-             "target":{"tool_name":"web_search"},"condition":{"min_count":1},
-             "severity":"error","enabled":True},
-            {"id":"query-not-empty","name":"搜索词不为空","type":"tool_param",
-             "target":{"tool_name":"web_search","param":"query"},
-             "condition":{"not_null":True,"min_length":2},
-             "severity":"error","enabled":True},
-            {"id":"has-answer","name":"输出包含答案","type":"output_match",
-             "target":{"agent":"demo"},"condition":{"pattern":"答案|结果|根据","operator":"regex","case_sensitive":False},
-             "severity":"error","enabled":True},
-        ]}
-        with open("agent-verify/assertions.yaml","w") as f:
-            yaml.dump(assertions, f, allow_unicode=True, default_flow_style=False)
+        print("\n📝 添加断言...")
+        cmd_add("Agent必须调用web_search工具至少一次")
+        cmd_add("搜索的参数query不能为空")
+        cmd_add("输出必须包含天气相关信息")
 
-        # 3. 场景A: 正确
-        print("\n📋 场景A: Agent 正确完成任务...")
-        trace_good = [
-            {"type":"tool_call","tool_name":"web_search","input":{"query":"天气"},"seq":1},
-            {"type":"tool_result","tool_name":"web_search","output":{"result":"晴"},"seq":2},
-            {"type":"run_end","final_output":"根据搜索结果，今天天气晴朗。","seq":3},
-        ]
-        with open("/tmp/demo-trace.jsonl","w") as f:
-            for e in trace_good:
-                f.write(json.dumps(e, ensure_ascii=False)+"\n")
+        print("\n📋 测试场景A: Agent 正确完成任务...")
+        cmd_test("我问北京天气，Agent调用了web_search搜索'北京天气'，返回了'答案：北京今天晴，22°C'")
 
-        result = subprocess.run([
-            "python3", str(SCRIPTS / "assertion_engine.py"),
-            "--assertions", "agent-verify/assertions.yaml",
-            "--trace", "/tmp/demo-trace.jsonl", "--check",
-        ], capture_output=True, text=True)
-        data = json.loads(result.stdout)
-        for r in data["results"]:
-            print(f"  {'✅' if r['pass_'] else '❌'} {r['assertion_id']}")
+        print("\n📋 测试场景B: Agent 忘记调工具...")
+        cmd_test("Agent直接返回了'抱歉，服务暂不可用'，没有调用任何工具")
 
-        # 4. 场景B: 错误
-        print("\n📋 场景B: Agent 忘记调工具...")
-        trace_bad = [
-            {"type":"run_end","final_output":"抱歉，出错了。","seq":1},
-        ]
-        with open("/tmp/demo-trace.jsonl","w") as f:
-            for e in trace_bad:
-                f.write(json.dumps(e, ensure_ascii=False)+"\n")
+        print("\n═══════════════════════════════════════════")
+        print("  演示完成！日常使用就是这三步:")
+        print("    1. agent-verify setup")
+        print("    2. agent-verify add \"你的断言\"")
+        print("    3. agent-verify test \"你的场景\"")
+        print("═══════════════════════════════════════════")
 
-        result = subprocess.run([
-            "python3", str(SCRIPTS / "assertion_engine.py"),
-            "--assertions", "agent-verify/assertions.yaml",
-            "--trace", "/tmp/demo-trace.jsonl", "--check",
-        ], capture_output=True, text=True)
-        data = json.loads(result.stdout)
-        for r in data["results"]:
-            print(f"  {'🔴' if not r['pass_'] else '⚠️'} {r['assertion_id']}")
 
-        print(f"\n🎉 演示完成！")
-        print(f"   日常工作流: agent-verify init → 编辑 assertions.yaml → agent-verify check trace.jsonl")
+# ── 自然语言解析器 ──────────────────────────────
+
+TOOLS = {
+    "web_search": ["search", "搜索", "web_search", "查", "检索", "搜"],
+    "read": ["read", "读", "读取", "阅读", "查看文件"],
+    "bash": ["bash", "执行", "运行", "命令", "终端"],
+    "write": ["write", "写", "写入", "保存", "创建文件"],
+}
+
+def parse_natural_language(desc: str) -> dict:
+    """自然语言 → 断言规则"""
+    desc_lower = desc.lower()
+
+    # 检测工具调用
+    for tool, keywords in TOOLS.items():
+        if any(kw in desc_lower for kw in keywords):
+            # 检测参数约束
+            if any(w in desc_lower for w in ["参数", "输入", "query", "查询词"]):
+                return {
+                    "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+                    "name": desc[:60],
+                    "type": "tool_param",
+                    "target": {"tool_name": tool, "param": "query"},
+                    "condition": {"not_null": True, "not_whitespace_only": True, "min_length": 1},
+                    "severity": "error",
+                    "enabled": True,
+                }
+            # 调用次数
+            if any(w in desc_lower for w in ["一次", "至少", "一次以上", "必须", "调用"]):
+                return {
+                    "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+                    "name": desc[:60],
+                    "type": "tool_call",
+                    "target": {"tool_name": tool},
+                    "condition": {"min_count": 1},
+                    "severity": "error",
+                    "enabled": True,
+                }
+
+    # 检测输出约束
+    if any(w in desc_lower for w in ["输出", "返回", "包含", "结果", "答案", "回复"]):
+        # 提取关键词作为 pattern
+        patterns = re.findall(r'["""]([^"""]+)["\"]', desc)
+        if not patterns:
+            patterns = re.findall(r'[「『]([^」』]+)[」』]', desc)
+        if not patterns:
+            # 尝试提取关键名词
+            words = re.findall(r'[一-鿿\w]+', desc)
+            keywords_in_desc = [w for w in words if len(w) >= 2 and w not in
+                ["输出", "返回", "包含", "必须", "应该", "需要", "不能", "检查", "验证",
+                 "断言", "添加", "描述", "结果", "回复", "答案", "信息", "内容", "一个", "一下"]]
+            if keywords_in_desc:
+                patterns = [keywords_in_desc[0]]
+
+        pattern = "|".join(patterns[:3]) if patterns else ".+"
+
+        return {
+            "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+            "name": desc[:60],
+            "type": "output_match",
+            "target": {"agent": "default"},
+            "condition": {"pattern": pattern, "operator": "regex", "case_sensitive": False},
+            "severity": "error",
+            "enabled": True,
+        }
+
+    # 默认: tool_call
+    return {
+        "id": f"assert-{datetime.now().strftime('%H%M%S')}",
+        "name": desc[:60],
+        "type": "tool_call",
+        "target": {"tool_name": "web_search"},
+        "condition": {"min_count": 1},
+        "severity": "error",
+        "enabled": True,
+    }
+
+
+# ── 场景→trace 构造器 ─────────────────────────
+
+def build_trace_from_description(desc: str) -> list[dict]:
+    """从自然语言描述构造 trace 事件"""
+    events = []
+    seq = 0
+    desc_lower = desc.lower()
+
+    # 检测工具调用
+    tools_called = []
+    for tool, keywords in TOOLS.items():
+        if any(kw in desc_lower for kw in keywords):
+            # 提取参数
+            input_data = {}
+            if tool == "web_search":
+                # 尝试提取查询词
+                query_match = re.search(r'[搜索索查][了]?["“]?(.{1,20})["”]?[,，\s]', desc)
+                query = query_match.group(1) if query_match else "查询"
+                input_data = {"query": query.strip('"\'"\'""“”')}
+            elif tool == "read":
+                file_match = re.search(r'["“]?([/\w.]+\.\w{1,5})["”]?', desc)
+                input_data = {"file_path": file_match.group(1) if file_match else "/path/to/file"}
+
+            seq += 1
+            events.append({
+                "type": "tool_call",
+                "tool_name": tool,
+                "input": input_data,
+                "seq": seq,
+            })
+
+            seq += 1
+            events.append({
+                "type": "tool_result",
+                "tool_name": tool,
+                "output": {"result": "..."},
+                "seq": seq,
+            })
+
+            tools_called.append(tool)
+
+    # 提取 final_output
+    output_patterns = [
+        r'(?:返回|回复|说|输出)[：:]["“]?(.{5,100})["”]?[。！!]',
+        r'["“]([^"”]{10,100})["”]',
+    ]
+    final_output = "处理完成"
+    for pat in output_patterns:
+        m = re.search(pat, desc)
+        if m:
+            final_output = m.group(1).strip('"\'"\'""“”')
+            break
+
+    # 如果没匹配到具体输出，用整个句子后半段
+    if final_output == "处理完成":
+        parts = re.split(r'[,，。!！]', desc)
+        if len(parts) > 1:
+            final_output = parts[-1].strip() or parts[-2].strip()
+
+    seq += 1
+    events.append({
+        "type": "run_end",
+        "final_output": final_output,
+        "seq": seq,
+    })
+
+    # 没有任何工具调用 → 直接报错场景
+    if not tools_called:
+        events = [events[-1]]  # 只保留 run_end
+        events[0]["seq"] = 1
+
+    return events
+
+
+# ── main ──────────────────────────────────────
 
 def main():
     if len(sys.argv) < 2:
         print(__doc__)
-        sys.exit(0)
+        return
 
     cmd = sys.argv[1]
-    args = sys.argv[2:]
+    rest = " ".join(sys.argv[2:]) if len(sys.argv) > 2 else ""
 
-    if cmd == "init":
-        cmd_init(args)
-    elif cmd == "check":
-        ok = cmd_check(args)
-        sys.exit(0 if ok else 1)
-    elif cmd == "demo":
-        cmd_demo()
-    elif cmd in ("-h", "--help", "help"):
-        print(__doc__)
+    commands = {
+        "setup": lambda: cmd_setup(),
+        "add": lambda: cmd_add(rest) if rest else print("用法: agent-verify add \"描述断言规则\""),
+        "test": lambda: cmd_test(rest) if rest else print("用法: agent-verify test \"描述Agent行为\""),
+        "list": lambda: cmd_list(),
+        "demo": lambda: cmd_demo(),
+    }
+
+    if cmd in commands:
+        commands[cmd]()
     else:
         print(f"未知命令: {cmd}")
         print(__doc__)
-        sys.exit(1)
 
 if __name__ == "__main__":
     main()
