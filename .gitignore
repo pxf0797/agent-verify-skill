@@ -1,3 +1,11 @@
 __pycache__/
 *.pyc
 .DS_Store
+test-demo.sh
+
+# Demo artifacts — generated when testing init_verify.py in the skill repo itself
+/assertions.yaml
+/config.yaml
+/suites/
+/baselines/
+/reports/
