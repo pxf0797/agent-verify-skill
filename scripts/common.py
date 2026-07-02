@@ -306,7 +306,6 @@ def parse_trace_output(raw_stdout: str, raw_stderr: str = "") -> list[TraceEvent
     # 正则: 匹配以 TRACE_PREFIX 开头后接 JSON 的行
     pattern = re.compile(
         r"\[AGENT_VERIFY:TRACE\]\s*(\{.*?\})\s*",
-        re.DOTALL,
     )
     for match in pattern.finditer(raw_stdout):
         json_str = match.group(1)
