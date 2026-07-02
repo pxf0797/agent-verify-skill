@@ -32,7 +32,7 @@ assertions:
   condition:
     not_null: true
     not_whitespace_only: true
-    min_length: 3
+    min_length: 2
   severity: error
   enabled: true
 - id: output-contains-answer

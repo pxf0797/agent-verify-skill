@@ -1,0 +1,177 @@
+#!/usr/bin/env python3
+"""
+agent-verify 简化工具 — 个人开发者日常使用
+
+用法:
+  agent-verify init [项目名]              初始化
+  agent-verify check <trace.jsonl>        运行检查
+  agent-verify demo                       跑演示
+
+示例:
+  agent-verify init my-agent
+  agent-verify check trace.jsonl
+"""
+
+import sys, os, subprocess, json, yaml
+from pathlib import Path
+
+SKILL_DIR = Path.home() / ".claude" / "skills" / "agent-verify"
+SCRIPTS = SKILL_DIR / "scripts"
+
+def find_project():
+    """从当前目录向上找 agent-verify/ 项目目录"""
+    cwd = Path.cwd()
+    for p in [cwd] + list(cwd.parents)[:5]:
+        v = p / "agent-verify"
+        if (v / "config.yaml").exists():
+            return v
+    return None
+
+def cmd_init(args):
+    name = args[0] if args else Path.cwd().name
+    subprocess.run([
+        "python3", str(SCRIPTS / "init_verify.py"),
+        "--target-dir", ".",
+        "--target-name", name,
+    ])
+    print("\n✅ 初始化完成！")
+    print(f"   断言文件: agent-verify/assertions.yaml  ← 编辑这个文件")
+    print(f"   接下来: agent-verify check trace.jsonl")
+
+def cmd_check(args):
+    proj = find_project()
+    if not proj:
+        print("❌ 当前目录下未找到 agent-verify/ 项目，请先执行: agent-verify init")
+        sys.exit(1)
+
+    trace_file = args[0] if args else "trace.jsonl"
+    assertions = proj / "assertions.yaml"
+
+    if not Path(trace_file).exists():
+        print(f"❌ trace 文件不存在: {trace_file}")
+        print(f"\n💡 trace.jsonl 格式 (每行一个JSON事件):")
+        print(f'   {{"type":"tool_call","tool_name":"Read","input":{{...}},"seq":1}}')
+        print(f'   {{"type":"run_end","final_output":"...","seq":2}}')
+        print(f"\n   事件类型: tool_call | tool_result | run_end")
+        sys.exit(1)
+
+    result = subprocess.run([
+        "python3", str(SCRIPTS / "assertion_engine.py"),
+        "--assertions", str(assertions),
+        "--trace", trace_file,
+        "--check",
+    ], capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"❌ 执行失败: {result.stderr}")
+        sys.exit(1)
+
+    data = json.loads(result.stdout)
+    passed = sum(1 for r in data["results"] if r["pass_"])
+    total = len(data["results"])
+
+    print(f"\n{'✅' if passed == total else '⚠️'}  {passed}/{total} 通过\n")
+    for r in data["results"]:
+        icon = "✅" if r["pass_"] else "❌"
+        reason = f" — {r['reason']}" if r.get("reason") else ""
+        print(f"  {icon} {r['assertion_id']}{reason}")
+
+    return passed == total
+
+def cmd_demo():
+    """跑完整演示"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        os.chdir(tmp)
+        print("═══════════════════════════════════")
+        print("  agent-verify 快速演示")
+        print("═══════════════════════════════════\n")
+
+        # 1. Init
+        print("📦 初始化...")
+        subprocess.run([
+            "python3", str(SCRIPTS / "init_verify.py"),
+            "--target-dir", ".", "--target-name", "demo-agent",
+        ], capture_output=True)
+
+        # 2. 写入断言
+        assertions = {"assertions": [
+            {"id":"called-search","name":"调用了搜索工具","type":"tool_call",
+             "target":{"tool_name":"web_search"},"condition":{"min_count":1},
+             "severity":"error","enabled":True},
+            {"id":"query-not-empty","name":"搜索词不为空","type":"tool_param",
+             "target":{"tool_name":"web_search","param":"query"},
+             "condition":{"not_null":True,"min_length":2},
+             "severity":"error","enabled":True},
+            {"id":"has-answer","name":"输出包含答案","type":"output_match",
+             "target":{"agent":"demo"},"condition":{"pattern":"答案|结果|根据","operator":"regex","case_sensitive":False},
+             "severity":"error","enabled":True},
+        ]}
+        with open("agent-verify/assertions.yaml","w") as f:
+            yaml.dump(assertions, f, allow_unicode=True, default_flow_style=False)
+
+        # 3. 场景A: 正确
+        print("\n📋 场景A: Agent 正确完成任务...")
+        trace_good = [
+            {"type":"tool_call","tool_name":"web_search","input":{"query":"天气"},"seq":1},
+            {"type":"tool_result","tool_name":"web_search","output":{"result":"晴"},"seq":2},
+            {"type":"run_end","final_output":"根据搜索结果，今天天气晴朗。","seq":3},
+        ]
+        with open("/tmp/demo-trace.jsonl","w") as f:
+            for e in trace_good:
+                f.write(json.dumps(e, ensure_ascii=False)+"\n")
+
+        result = subprocess.run([
+            "python3", str(SCRIPTS / "assertion_engine.py"),
+            "--assertions", "agent-verify/assertions.yaml",
+            "--trace", "/tmp/demo-trace.jsonl", "--check",
+        ], capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        for r in data["results"]:
+            print(f"  {'✅' if r['pass_'] else '❌'} {r['assertion_id']}")
+
+        # 4. 场景B: 错误
+        print("\n📋 场景B: Agent 忘记调工具...")
+        trace_bad = [
+            {"type":"run_end","final_output":"抱歉，出错了。","seq":1},
+        ]
+        with open("/tmp/demo-trace.jsonl","w") as f:
+            for e in trace_bad:
+                f.write(json.dumps(e, ensure_ascii=False)+"\n")
+
+        result = subprocess.run([
+            "python3", str(SCRIPTS / "assertion_engine.py"),
+            "--assertions", "agent-verify/assertions.yaml",
+            "--trace", "/tmp/demo-trace.jsonl", "--check",
+        ], capture_output=True, text=True)
+        data = json.loads(result.stdout)
+        for r in data["results"]:
+            print(f"  {'🔴' if not r['pass_'] else '⚠️'} {r['assertion_id']}")
+
+        print(f"\n🎉 演示完成！")
+        print(f"   日常工作流: agent-verify init → 编辑 assertions.yaml → agent-verify check trace.jsonl")
+
+def main():
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(0)
+
+    cmd = sys.argv[1]
+    args = sys.argv[2:]
+
+    if cmd == "init":
+        cmd_init(args)
+    elif cmd == "check":
+        ok = cmd_check(args)
+        sys.exit(0 if ok else 1)
+    elif cmd == "demo":
+        cmd_demo()
+    elif cmd in ("-h", "--help", "help"):
+        print(__doc__)
+    else:
+        print(f"未知命令: {cmd}")
+        print(__doc__)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
