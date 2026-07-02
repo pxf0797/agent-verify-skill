@@ -1,0 +1,76 @@
+# ============================================================
+# agent-verify Configuration
+# 项目: {{TARGET_NAME}}
+# 创建时间: {{CURRENT_DATE}}
+# 版本: {{SKILL_VERSION}}
+# ============================================================
+# 本配置文件定义了 agent-verify Skill 的全局行为。
+# 所有字段均有默认值，建议根据项目需要修改。
+# MVP 字段已全部标注，V1.0 字段注释标注。
+# ============================================================
+
+# --- 版本 ---
+version: "1"          # 配置版本，用于未来兼容性检查
+
+# --- 执行配置 ---
+execution:
+  mode: sequential               # 执行模式: sequential | parallel (V1.0)
+  timeout: 120                   # 每个用例的超时时间（秒）
+  stop_on_first_error: false     # 首个断言失败时停止当前用例后续检查
+  fail_fast: false               # 首个用例失败时停止整个回归
+  fail_fast_threshold: 3         # 连续失败 N 个用例后停止 (fail_fast=false 时生效)
+  # max_retries: 1               # (V1.0) 用例失败重试次数
+  # retry_delay_ms: 1000         # (V1.0) 重试间隔（毫秒）
+  agent_command: "claude --print" # 执行 Agent 的 CLI 命令
+
+# --- 断言引擎配置 ---
+assertions:
+  default_severity: error        # 默认严重级别: error | warning
+  file: assertions.yaml          # 断言定义文件（相对于 agent-verify/）
+  fail_on_warning: false         # warning 级别的失败是否视为整体失败
+  allow_custom_script: false     # 是否允许执行 custom_script
+  custom_script_dir: scripts/custom_checks  # 自定义脚本搜索目录
+
+# --- LLM 裁判配置 (V1.0) ---
+# llm_judge:
+#   enabled: false               # 是否默认启用 LLM 裁判
+#   primary_model: claude-haiku  # 一级初裁模型
+#   arbitration_model: claude-sonnet  # 三级仲裁模型
+#   n_runs: 3                    # 每个维度的评分次数
+#   max_variance: 1.5            # 方差阈值，超过则触发升级仲裁
+#   max_budget_usd: 50.0         # 月度最大预算（USD）
+#   quality_criteria:
+#     accuracy: "事实正确性：回答中的事实信息是否正确"
+#     completeness: "信息完整性：回答是否覆盖了问题的所有方面"
+#     reasonableness: "推理合理性：推理过程是否合乎逻辑"
+
+# --- Feature Flag 配置 (V1.0) ---
+# feature_flags:
+#   default_state: OFF
+#   flags:
+#     - name: NEW_SEARCH_ALGORITHM
+#       description: "使用新版搜索算法"
+#       default: OFF
+#     - name: ENABLE_CACHE
+#       description: "启用结果缓存"
+#       default: ON
+
+# --- 基线管理配置 ---
+baselines:
+  enabled: true                  # 是否启用基线管理
+  dir: baselines                 # 基线文件存储目录
+  auto_save: true                # 回归测试后自动保存基线
+  max_kept: 20                   # 最多保留的基线数量
+  compare_on_run: true           # 回归测试后自动与最新基线对比
+
+# --- 报告生成配置 ---
+reports:
+  default_format: markdown       # 默认报告格式: markdown | json | html (V1.0)
+  dir: reports                   # 报告输出目录
+  include_passed: true           # 报告中是否包含通过的断言详情
+
+# --- 覆盖率追踪配置 (V1.0) ---
+# coverage:
+#   track_tools: false
+#   track_prompts: false
+#   min_tool_coverage: 0.0

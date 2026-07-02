@@ -1,0 +1,93 @@
+# ============================================================
+# agent-verify Test Suite
+# 项目: {{TARGET_NAME}}
+# 创建时间: {{CURRENT_DATE}}
+# 版本: {{SKILL_VERSION}}
+# ============================================================
+# 本文件定义测试套件，包含默认配置、测试用例和分组。
+# 用例级配置覆盖 defaults 中的值，defaults 覆盖全局 config.yaml 的设置。
+# 优先级: 用例级 > defaults > config.yaml
+# ============================================================
+
+# --- 元信息 ---
+version: "1"                       # 套件文件版本
+name: "search-suite"               # 套件名称，在报告和基线中使用
+description: "Search agent 基础测试套件"  # 可选描述
+
+# --- 默认配置（所有用例共享，可在单个用例中覆盖） ---
+defaults:
+  agent_command: "claude --print"               # Agent 调用命令
+  timeout: 120                                   # 用例超时（秒）
+  assertions: []                                 # 默认启用的断言 ID 列表（空=全部启用）
+  input_prefix: ""                               # 在用户输入前追加的上下文
+  tags: []                                       # 默认标签
+  env: {}                                        # 环境变量覆盖
+
+# --- 测试用例定义 ---
+test_cases:
+  # --- Happy Path 用例 ---
+  - id: search-simple-001                         # 用例唯一标识（kebab-case）
+    name: "Simple web search"                     # 用例名称
+    description: "简单搜索"                        # 可选描述
+    input: "搜索 2024 年诺贝尔物理学奖得主"          # Agent 的输入文本
+    expected: "回答应包含获奖者姓名和获奖原因"        # 期望输出描述（供 LLM 裁判参考）
+    tags: ["smoke", "basic"]                       # 标签（与 defaults 的 tags 合并）
+    assertions: []                                 # 启用断言列表（空=使用全部）
+    disabled_assertions: []                        # 禁用断言列表
+    # timeout: 120                                 # 用例级超时覆盖
+    # input_prefix: "你是搜索助手。\n"               # 用例级前缀覆盖
+
+  - id: search-empty-input-001
+    name: "Empty input handling"
+    description: "测试空输入异常处理"
+    input: ""                                      # 空输入：测试 Agent 的异常处理
+    expected: "Agent 不应崩溃，应提示输入为空"
+    tags: ["edge-case"]
+
+  - id: search-long-query-001
+    name: "Long query search"
+    description: "测试长查询的处理"
+    input: "请帮我搜索以下内容的最新情况：人工智能在医疗诊断中的应用、自动驾驶技术的最新进展、可再生能源技术的发展趋势"
+    expected: "应能处理长文本输入并正确执行搜索"
+    tags: ["performance"]
+
+  # --- RealWorld 用例 ---
+  - id: search-multi-source-001
+    name: "Multi-source comparison search"
+    description: "多源对比搜索"
+    input: "比较 Python、JavaScript 和 Go 在 2024 年的开发者社区增长趋势"
+    expected: "应提供多个来源的对比分析"
+    tags: ["realworld"]
+    timeout: 180                                   # 复杂用例需要更长时间
+
+  - id: search-verify-citation-001
+    name: "Search with citation verification"
+    description: "搜索并验证引用来源"
+    input: "搜索 2024 年诺贝尔化学奖得主，并引用来源"
+    expected: "应提供获奖者信息并附上可验证的来源链接"
+    tags: ["realworld", "quality"]
+    assertions: ["at-least-one-search", "search-query-not-empty", "output-contains-answer"]
+    disabled_assertions: []
+
+# --- 分组定义（用于 --scope 选择用例子集） ---
+groups:
+  smoke:
+    description: "冒烟测试 — 快速验证基本功能"
+    cases:
+      - search-simple-001
+      - search-empty-input-001
+
+  full:
+    description: "完整回归 — 运行所有用例"
+    cases:
+      - search-simple-001
+      - search-empty-input-001
+      - search-long-query-001
+      - search-multi-source-001
+      - search-verify-citation-001
+
+  realworld:
+    description: "真实场景用例"
+    cases:
+      - search-multi-source-001
+      - search-verify-citation-001

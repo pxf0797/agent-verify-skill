@@ -1,0 +1,107 @@
+# ============================================================
+# agent-verify Assertions
+# 项目: {{TARGET_NAME}}
+# 创建时间: {{CURRENT_DATE}}
+# 版本: {{SKILL_VERSION}}
+# ============================================================
+# 本文件定义 Agent 验证的断言规则。
+# enabled: false 的断言被引擎跳过，仅作参考。
+# MVP 断言类型: tool_call | tool_param | output_match
+# V1.0 断言类型: path_sequence | timing | output_schema
+# 扩展类型: custom_script
+# ============================================================
+
+# --- MVP 断言类型 ---
+
+# 示例 1: tool_call — 验证工具至少被调用 1 次
+- id: at-least-one-search
+  name: "Search tool was called at least once"
+  type: tool_call
+  target:
+    tool_name: web_search                      # 要检查的工具名称
+  condition:
+    min_count: 1                               # 最小调用次数（>=1 则通过）
+  severity: error
+  enabled: true                                # 设为 false 时跳过此断言
+
+# 示例 2: tool_param — 验证工具参数不为空
+- id: search-query-not-empty
+  name: "Search query is not empty"
+  type: tool_param
+  target:
+    tool_name: web_search
+    param_path: query                          # 嵌套路径如: options.max_tokens
+  condition:
+    not_null: true
+    not_whitespace_only: true
+    min_length: 3
+  severity: error
+  enabled: true
+
+# 示例 3: output_match — 验证输出包含预期内容
+- id: output-contains-answer
+  name: "Output contains expected answer"
+  type: output_match
+  target:
+    field: final_output                        # 检查的字段，默认 final_output
+  condition:
+    pattern: "答案[：:]"                        # 正则表达式
+    min_matches: 1                             # 0=负向断言（不应匹配）
+    case_sensitive: false                      # 大小写不敏感
+  severity: error
+  enabled: true
+
+# 示例 4: tool_call — 验证工具不被过度调用
+- id: expensive-tool-capped
+  name: "Prevent excessive calls to expensive tool"
+  type: tool_call
+  target:
+    tool_name: web_scrape
+  condition:
+    max_count: 3
+  severity: warning                            # warning 级别，不阻断流程
+  enabled: false                               # 已禁用，供参考
+
+# --- V1.0 断言类型（参考示例，MVP 阶段引擎不会实际检查） ---
+
+# 示例 5: path_sequence — 验证执行路径顺序
+# - id: expected-path-flow
+#   name: "Agent follows expected planning-execution-verification flow"
+#   type: path_sequence
+#   target:
+#     steps:
+#       - planning
+#       - execution
+#       - verification
+#   condition:
+#     order: relaxed
+#     all_present: true
+#   enabled: false
+
+# 示例 6: timing — 验证执行时间
+# - id: total-time-limit
+#   name: "Total execution under 60 seconds"
+#   type: timing
+#   target:
+#     phase: total
+#   condition:
+#     max_duration_ms: 60000
+#   enabled: false
+
+# 示例 7: output_schema — 验证输出 JSON Schema
+# - id: valid-json-structure
+#   name: "Output matches expected JSON structure"
+#   type: output_schema
+#   target:
+#     field: final_output
+#   condition:
+#     schema:
+#       type: object
+#       required:
+#         - answer
+#       properties:
+#         answer:
+#           type: string
+#         sources:
+#           type: array
+#   enabled: false
